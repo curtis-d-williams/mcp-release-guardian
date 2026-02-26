@@ -85,7 +85,9 @@ Restart Claude Desktop after editing the config.
 Input:
 
 ```json
-{ "repo_path": "/path/to/my-project" }
+{
+  "repo_path": "/ABS/PATH/TO/REPO"
+}
 ```
 
 Example response:
@@ -93,18 +95,18 @@ Example response:
 ```json
 {
   "tool": "check_repo_hygiene",
-  "repo_path": "/path/to/my-project",
+  "repo_path": "/ABS/PATH/TO/REPO",
   "ok": true,
   "checks": [
-    { "check_id": "has_package_definition", "ok": true,  "details": "Found pyproject.toml" },
-    { "check_id": "has_license",            "ok": true,  "details": "Found LICENSE" },
-    { "check_id": "has_readme",             "ok": true,  "details": "Found README.md" },
-    { "check_id": "has_bug_report_template","ok": true,  "details": "Found .github/ISSUE_TEMPLATE/bug_report.yml" },
-    { "check_id": "has_ci_workflows",       "ok": false, "details": "Not found: .github/workflows/" },
-    { "check_id": "has_v1_contract",        "ok": true,  "details": "Found docs/V1_CONTRACT.md" },
-    { "check_id": "has_determinism_notes",  "ok": true,  "details": "Found docs/DETERMINISM_NOTES.md" }
+    { "check_id": "has_package_definition",  "ok": true,  "details": "Found pyproject.toml" },
+    { "check_id": "has_license",             "ok": true,  "details": "Found LICENSE" },
+    { "check_id": "has_readme",              "ok": true,  "details": "Found README.md" },
+    { "check_id": "has_bug_report_template", "ok": true,  "details": "Found .github/ISSUE_TEMPLATE/bug_report.yml" },
+    { "check_id": "has_ci_workflows",        "ok": true,  "details": "Found .github/workflows/" },
+    { "check_id": "has_v1_contract",         "ok": true,  "details": "Found docs/V1_CONTRACT.md" },
+    { "check_id": "has_determinism_notes",   "ok": true,  "details": "Found docs/DETERMINISM_NOTES.md" }
   ],
-  "fail_closed": true
+  "fail_closed": false
 }
 ```
 
