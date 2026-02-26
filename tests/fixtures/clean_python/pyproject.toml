@@ -1,0 +1,5 @@
+[project]
+name = "test-pkg"
+version = "0.1.0"
+description = "Fixture package for mcp-release-guardian tests"
+requires-python = ">=3.11"
