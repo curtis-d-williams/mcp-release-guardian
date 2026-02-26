@@ -1,0 +1,113 @@
+name: Bug report
+description: Report a deterministic, reproducible issue with mcp-release-guardian (V1).
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for filing a bug. V1 is deterministic and local-only by design.
+        Please provide complete, reproducible details. Missing details may be closed as fail-closed by policy.
+
+  - type: input
+    id: version
+    attributes:
+      label: mcp-release-guardian version
+      description: The version of mcp-release-guardian you are running (e.g., v0.1.0).
+      placeholder: "v0.1.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: tool
+    attributes:
+      label: Tool
+      description: Which MCP tool produced the issue?
+      options:
+        - check_repo_hygiene
+        - check_version_alignment
+        - generate_release_checklist
+    validations:
+      required: true
+
+  - type: textarea
+    id: input_json
+    attributes:
+      label: Tool input JSON
+      description: Paste the exact input JSON you sent to the tool (no redactions unless required).
+      render: json
+      placeholder: |
+        {
+          "repo_path": "/path/to/repo",
+          "expected_tag": "v0.1.0"
+        }
+    validations:
+      required: true
+
+  - type: textarea
+    id: output_json
+    attributes:
+      label: Tool output JSON
+      description: Paste the full output JSON (do not truncate).
+      render: json
+    validations:
+      required: true
+
+  - type: textarea
+    id: repo_layout
+    attributes:
+      label: Target repo layout (relevant files only)
+      description: Paste a minimal file tree showing relevant files. Example: `tree -a -L 4`.
+      render: text
+      placeholder: |
+        .
+        ├── pyproject.toml
+        ├── README.md
+        ├── LICENSE
+        └── .github
+            ├── ISSUE_TEMPLATE
+            │   └── bug_report.yml
+            └── workflows
+                └── ci.yml
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: OS
+      description: Your operating system (e.g., macOS 14.3, Ubuntu 22.04, Windows 11).
+      placeholder: "macOS 14.3"
+    validations:
+      required: true
+
+  - type: input
+    id: python
+    attributes:
+      label: Python version
+      description: Output of `python --version` (or the interpreter used).
+      placeholder: "Python 3.11.8"
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: determinism
+    attributes:
+      label: Determinism confirmation
+      description: Confirm you attempted to reproduce the issue deterministically.
+      options:
+        - label: I reran the same tool call against the same local repo state and observed the same issue.
+          required: true
+        - label: I confirm the tool did not require network access for this reproduction.
+          required: true
+        - label: I confirm the target repo was not modified by the tool.
+          required: true
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Additional notes
+      description: Anything else that helps reproduce the issue (filesystem case-sensitivity, symlinks, etc.).
+      render: text
+    validations:
+      required: false
