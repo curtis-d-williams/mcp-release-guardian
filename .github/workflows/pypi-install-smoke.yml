@@ -1,7 +1,6 @@
 name: PyPI install smoke
 
 on:
-  workflow_dispatch:
   push:
     tags:
       - "v*"
@@ -24,9 +23,8 @@ jobs:
         run: |
           TAG="${GITHUB_REF_NAME}"
           VER="${TAG#v}"
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "ver=$VER" >> "$GITHUB_OUTPUT"
-          echo "Using tag=$TAG ver=$VER"
+          echo "Using ver=$VER"
 
       - name: Install from PyPI
         shell: bash
