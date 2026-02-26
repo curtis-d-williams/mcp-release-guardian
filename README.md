@@ -10,14 +10,14 @@ Deterministic MCP server for validating release hygiene in local repositories. N
 
 | Tool | What it does |
 |------|-------------|
-| `check_repo_hygiene` | Six read-only checks: git repo state, README, LICENSE, CHANGELOG |
-| `check_version_alignment` | Compares `pyproject.toml` / `package.json` / git tag versions |
-| `generate_release_checklist` | Returns a deterministic ordered checklist for a release |
+| `check_repo_hygiene` | Seven file/directory presence checks: package definition, LICENSE, README, bug report template, CI workflows, V1 contract doc, determinism notes doc |
+| `check_version_alignment` | Reads `pyproject.toml [project].version` and compares it to an optional expected tag |
+| `generate_release_checklist` | Generates a deterministic markdown checklist based on local repo state |
 
 All tools are:
 - **Network-free** — no external API calls, ever
 - **Read-only** — no writes to the target repository
-- **Fail-closed** — errors mark checks as failed, not as passed
+- **Fail-closed** — unresolvable state marks that result as failed, not passed
 
 ---
 
@@ -82,10 +82,95 @@ Restart Claude Desktop after editing the config.
 
 ### check_repo_hygiene
 
+Input:
+
+```json
+{ "repo_path": "/path/to/my-project" }
+```
+
+Example response:
+
 ```json
 {
   "tool": "check_repo_hygiene",
-  "arguments": { "repo_path": "/path/to/my-project" }
+  "repo_path": "/path/to/my-project",
+  "ok": true,
+  "checks": [
+    { "check_id": "has_package_definition", "ok": true,  "details": "Found pyproject.toml" },
+    { "check_id": "has_license",            "ok": true,  "details": "Found LICENSE" },
+    { "check_id": "has_readme",             "ok": true,  "details": "Found README.md" },
+    { "check_id": "has_bug_report_template","ok": true,  "details": "Found .github/ISSUE_TEMPLATE/bug_report.yml" },
+    { "check_id": "has_ci_workflows",       "ok": false, "details": "Not found: .github/workflows/" },
+    { "check_id": "has_v1_contract",        "ok": true,  "details": "Found docs/V1_CONTRACT.md" },
+    { "check_id": "has_determinism_notes",  "ok": true,  "details": "Found docs/DETERMINISM_NOTES.md" }
+  ],
+  "fail_closed": true
+}
+```
+
+`ok` is `true` only when all seven checks pass. `fail_closed` equals `not ok`.
+
+---
+
+### check_version_alignment
+
+Input:
+
+```json
+{
+  "repo_path": "/path/to/my-project",
+  "expected_tag": "v1.2.0"
+}
+```
+
+`expected_tag` is optional. When omitted, the tool returns version metadata without performing a comparison.
+
+Example response (match):
+
+```json
+{
+  "tool": "check_version_alignment",
+  "repo_path": "/path/to/my-project",
+  "ok": true,
+  "expected_tag": "v1.2.0",
+  "detected": {
+    "version": "1.2.0",
+    "source": "pyproject.toml"
+  },
+  "details": "Version 1.2.0 matches expected tag v1.2.0",
+  "fail_closed": false
+}
+```
+
+Example response (version absent — fail-closed):
+
+```json
+{
+  "tool": "check_version_alignment",
+  "repo_path": "/path/to/my-project",
+  "ok": false,
+  "expected_tag": "v1.2.0",
+  "detected": {
+    "version": null,
+    "source": null
+  },
+  "details": "Could not detect version: pyproject.toml missing or [project].version absent",
+  "fail_closed": true
+}
+```
+
+Version is read exclusively from `pyproject.toml [project].version`. The leading `v` in `expected_tag` is stripped before comparison.
+
+---
+
+### generate_release_checklist
+
+Input:
+
+```json
+{
+  "repo_path": "/path/to/my-project",
+  "target_tag": "v1.2.0"
 }
 ```
 
@@ -93,42 +178,20 @@ Example response:
 
 ```json
 {
-  "repo_path": "/path/to/my-project",
-  "checks": [
-    { "name": "is_git_repo",        "passed": true, "detail": "..." },
-    { "name": "clean_working_tree", "passed": true, "detail": "Working tree is clean" },
-    { "name": "no_untracked_files", "passed": true, "detail": "No untracked files" },
-    { "name": "has_readme",         "passed": true, "detail": "Found README.md" },
-    { "name": "has_license",        "passed": true, "detail": "Found LICENSE" },
-    { "name": "has_changelog",      "passed": true, "detail": "Found CHANGELOG.md" }
-  ],
-  "all_passed": true
-}
-```
-
-### check_version_alignment
-
-```json
-{
-  "tool": "check_version_alignment",
-  "arguments": {
-    "repo_path": "/path/to/my-project",
-    "expected_tag": "v1.2.0"
-  }
-}
-```
-
-### generate_release_checklist
-
-```json
-{
   "tool": "generate_release_checklist",
-  "arguments": {
-    "repo_path": "/path/to/my-project",
-    "version": "v1.2.0"
-  }
+  "repo_path": "/path/to/my-project",
+  "target_tag": "v1.2.0",
+  "checklist_markdown": "# Release Checklist — v1.2.0\n\n## Version alignment\n...",
+  "inputs_used": {
+    "detected_version": "1.2.0",
+    "has_ci_workflows": true,
+    "has_bug_template": true
+  },
+  "fail_closed": false
 }
 ```
+
+`fail_closed` is `true` when `detected_version` is `null` (version undetectable). The checklist covers: version alignment, test run, tag creation, release notes, and adoption hooks verification.
 
 ---
 
@@ -137,7 +200,7 @@ Example response:
 ```bash
 git clone https://github.com/YOUR_ORG/mcp-release-guardian.git
 cd mcp-release-guardian
-pip install -e ".[dev]"
+pip install -e .
 pytest -q
 ```
 
