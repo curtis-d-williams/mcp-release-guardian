@@ -1,14 +1,12 @@
 """FastMCP server for mcp-release-guardian.
 
 Deterministic, network-free, read-only release hygiene tools.
-Fail-closed: any error or missing state returns a failing result rather
+Fail-closed: any unresolvable state returns a failing result rather
 than raising an exception.
 """
 
 from __future__ import annotations
 
-import json
-import subprocess
 import tomllib
 from pathlib import Path
 
@@ -22,19 +20,33 @@ mcp = FastMCP("mcp-release-guardian")
 # ---------------------------------------------------------------------------
 
 
-def _run_git(args: list[str], cwd: Path) -> tuple[int, str, str]:
-    """Run a git command; returns (returncode, stdout, stderr). Never raises."""
+def _detect_version(path: Path) -> str | None:
+    """Read pyproject.toml [project].version; return None if absent or unreadable."""
+    pyproject_path = path / "pyproject.toml"
+    if not pyproject_path.exists():
+        return None
     try:
-        result = subprocess.run(
-            ["git"] + args,
-            capture_output=True,
-            text=True,
-            cwd=cwd,
-            timeout=10,
-        )
-        return result.returncode, result.stdout, result.stderr
-    except (OSError, subprocess.TimeoutExpired) as exc:
-        return 1, "", str(exc)
+        with open(pyproject_path, "rb") as fh:
+            data = tomllib.load(fh)
+        v = data.get("project", {}).get("version")
+        return str(v) if v is not None else None
+    except Exception:
+        return None
+
+
+def _has_pytest(path: Path) -> bool:
+    """Return True if pytest is referenced in the repo's config files."""
+    if (path / "pytest.ini").exists():
+        return True
+    for candidate in ["pyproject.toml", "setup.cfg", "tox.ini"]:
+        p = path / candidate
+        if p.exists():
+            try:
+                if "pytest" in p.read_text():
+                    return True
+            except OSError:
+                pass
+    return False
 
 
 # ---------------------------------------------------------------------------
@@ -44,112 +56,104 @@ def _run_git(args: list[str], cwd: Path) -> tuple[int, str, str]:
 
 @mcp.tool()
 def check_repo_hygiene(repo_path: str) -> dict:
-    """Check repository hygiene for release readiness.
+    """Validate that a repo contains the minimum release hygiene artifacts.
 
-    Runs six deterministic, read-only checks against a local git repository.
-    Returns a JSON object with per-check results and an overall pass/fail flag.
-    No network access. Fail-closed: any unreadable state marks that check failed.
+    Runs seven file/directory presence checks as defined in docs/V1_CONTRACT.md.
+    No network access. Fail-closed.
 
     Args:
-        repo_path: Absolute or relative path to the local repository root.
+        repo_path: Absolute or relative path to the repository root.
 
     Returns:
         {
-            "repo_path": str,          # resolved absolute path
-            "checks": [
-                {
-                    "name": str,       # check identifier
-                    "passed": bool,
-                    "detail": str      # human-readable explanation
-                }
-            ],
-            "all_passed": bool
+            "tool": "check_repo_hygiene",
+            "repo_path": str,
+            "ok": bool,
+            "checks": [{"check_id": str, "ok": bool, "details": str}],
+            "fail_closed": bool
         }
     """
     path = Path(repo_path).resolve()
     checks: list[dict] = []
 
-    # Check 1: is_git_repo
-    is_git = path.is_dir() and (path / ".git").exists()
+    # 1. pyproject.toml OR setup.cfg OR setup.py
+    pkg_candidates = ["pyproject.toml", "setup.cfg", "setup.py"]
+    found_pkg = next((f for f in pkg_candidates if (path / f).exists()), None)
     checks.append({
-        "name": "is_git_repo",
-        "passed": is_git,
-        "detail": f"{path / '.git'} exists" if is_git else "No .git directory found",
+        "check_id": "has_package_definition",
+        "ok": found_pkg is not None,
+        "details": f"Found {found_pkg}" if found_pkg
+                   else f"Not found (checked: {', '.join(pkg_candidates)})",
     })
 
-    if not is_git:
-        return {"repo_path": str(path), "checks": checks, "all_passed": False}
-
-    # Run git status once; reuse for checks 2 and 3
-    rc, stdout, stderr = _run_git(["status", "--porcelain"], path)
-    status_ok = rc == 0
-    status_lines = stdout.splitlines() if status_ok else []
-
-    # Check 2: clean_working_tree (no staged/modified tracked files)
-    if not status_ok:
-        clean = False
-        clean_detail = f"git status failed: {stderr.strip()}"
-    else:
-        dirty = [ln for ln in status_lines if ln and not ln.startswith("??")]
-        clean = len(dirty) == 0
-        clean_detail = (
-            "Working tree is clean"
-            if clean
-            else f"{len(dirty)} modified/staged file(s)"
-        )
-    checks.append({"name": "clean_working_tree", "passed": clean, "detail": clean_detail})
-
-    # Check 3: no_untracked_files
-    if not status_ok:
-        no_untracked = False
-        untracked_detail = "git status failed"
-    else:
-        untracked = [ln for ln in status_lines if ln.startswith("??")]
-        no_untracked = len(untracked) == 0
-        untracked_detail = (
-            "No untracked files"
-            if no_untracked
-            else f"{len(untracked)} untracked file(s)"
-        )
+    # 2. LICENSE
+    lic_candidates = ["LICENSE", "LICENSE.txt", "LICENSE.md", "LICENSE.rst"]
+    found_lic = next((f for f in lic_candidates if (path / f).exists()), None)
     checks.append({
-        "name": "no_untracked_files",
-        "passed": no_untracked,
-        "detail": untracked_detail,
+        "check_id": "has_license",
+        "ok": found_lic is not None,
+        "details": f"Found {found_lic}" if found_lic
+                   else f"Not found (checked: {', '.join(lic_candidates)})",
     })
 
-    # Check 4: has_readme
+    # 3. README
     readme_candidates = ["README.md", "README.rst", "README.txt", "README"]
     found_readme = next((f for f in readme_candidates if (path / f).exists()), None)
     checks.append({
-        "name": "has_readme",
-        "passed": found_readme is not None,
-        "detail": f"Found {found_readme}" if found_readme else "No README file found",
+        "check_id": "has_readme",
+        "ok": found_readme is not None,
+        "details": f"Found {found_readme}" if found_readme
+                   else f"Not found (checked: {', '.join(readme_candidates)})",
     })
 
-    # Check 5: has_license
-    license_candidates = ["LICENSE", "LICENSE.txt", "LICENSE.md", "LICENSE.rst"]
-    found_license = next((f for f in license_candidates if (path / f).exists()), None)
+    # 4. .github/ISSUE_TEMPLATE/bug_report.yml
+    bug_yml = path / ".github" / "ISSUE_TEMPLATE" / "bug_report.yml"
+    bug_ok = bug_yml.exists()
     checks.append({
-        "name": "has_license",
-        "passed": found_license is not None,
-        "detail": f"Found {found_license}" if found_license else "No LICENSE file found",
+        "check_id": "has_bug_report_template",
+        "ok": bug_ok,
+        "details": "Found .github/ISSUE_TEMPLATE/bug_report.yml" if bug_ok
+                   else "Not found: .github/ISSUE_TEMPLATE/bug_report.yml",
     })
 
-    # Check 6: has_changelog
-    changelog_candidates = [
-        "CHANGELOG.md", "CHANGELOG.rst", "CHANGELOG.txt", "CHANGELOG", "HISTORY.md",
-    ]
-    found_changelog = next((f for f in changelog_candidates if (path / f).exists()), None)
+    # 5. .github/workflows/ directory (presence only)
+    workflows_dir = path / ".github" / "workflows"
+    wf_ok = workflows_dir.is_dir()
     checks.append({
-        "name": "has_changelog",
-        "passed": found_changelog is not None,
-        "detail": (
-            f"Found {found_changelog}" if found_changelog else "No CHANGELOG file found"
-        ),
+        "check_id": "has_ci_workflows",
+        "ok": wf_ok,
+        "details": "Found .github/workflows/" if wf_ok
+                   else "Not found: .github/workflows/",
     })
 
-    all_passed = all(c["passed"] for c in checks)
-    return {"repo_path": str(path), "checks": checks, "all_passed": all_passed}
+    # 6. docs/V1_CONTRACT.md
+    contract_md = path / "docs" / "V1_CONTRACT.md"
+    contract_ok = contract_md.exists()
+    checks.append({
+        "check_id": "has_v1_contract",
+        "ok": contract_ok,
+        "details": "Found docs/V1_CONTRACT.md" if contract_ok
+                   else "Not found: docs/V1_CONTRACT.md",
+    })
+
+    # 7. docs/DETERMINISM_NOTES.md
+    det_md = path / "docs" / "DETERMINISM_NOTES.md"
+    det_ok = det_md.exists()
+    checks.append({
+        "check_id": "has_determinism_notes",
+        "ok": det_ok,
+        "details": "Found docs/DETERMINISM_NOTES.md" if det_ok
+                   else "Not found: docs/DETERMINISM_NOTES.md",
+    })
+
+    ok = all(c["ok"] for c in checks)
+    return {
+        "tool": "check_repo_hygiene",
+        "repo_path": str(path),
+        "ok": ok,
+        "checks": checks,
+        "fail_closed": not ok,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -158,105 +162,68 @@ def check_repo_hygiene(repo_path: str) -> dict:
 
 
 @mcp.tool()
-def check_version_alignment(repo_path: str, expected_tag: str) -> dict:
-    """Check that version strings across source files and git tags are aligned.
+def check_version_alignment(
+    repo_path: str,
+    expected_tag: str | None = None,
+) -> dict:
+    """Check that pyproject.toml [project].version matches an optional expected tag.
 
-    Inspects pyproject.toml (PEP 621 and Poetry layouts), package.json, and
-    the local git tag list. No network access. Fail-closed: missing files are
-    omitted from sources; a missing git tag is reported as unaligned.
+    No network access. Fail-closed when version cannot be detected.
 
     Args:
-        repo_path:    Absolute or relative path to the local repository root.
-        expected_tag: The release tag to validate against, e.g. "v0.1.0".
-                      The leading "v" is stripped when comparing to file-level
-                      version strings (e.g. "0.1.0" in pyproject.toml).
+        repo_path:    Absolute or relative path to the repository root.
+        expected_tag: Optional target tag, e.g. "v0.1.0". Leading "v" is stripped
+                      before comparison with the file-level version string.
 
     Returns:
         {
-            "repo_path":    str,
-            "expected_tag": str,
-            "sources": [
-                {
-                    "source":  str,          # "pyproject.toml" | "package.json" | "git_tag"
-                    "version": str | null,   # version found, or null if absent/unreadable
-                    "aligned": bool
-                }
-            ],
-            "all_aligned": bool              # false if sources is empty (fail-closed)
+            "tool": "check_version_alignment",
+            "repo_path": str,
+            "ok": bool,
+            "expected_tag": str | null,
+            "detected": {"version": str | null, "source": str | null},
+            "details": str,
+            "fail_closed": bool
         }
     """
     path = Path(repo_path).resolve()
-    expected_version = expected_tag.lstrip("v")
-    sources: list[dict] = []
 
-    if not path.exists():
-        return {
-            "repo_path": str(path),
-            "expected_tag": expected_tag,
-            "sources": [],
-            "all_aligned": False,
-            "error": "repo_path does not exist",
-        }
+    detected_version = _detect_version(path)
+    detected_source = "pyproject.toml" if detected_version is not None else None
+    fail_closed = detected_version is None
 
-    # Source 1: pyproject.toml
-    pyproject_path = path / "pyproject.toml"
-    if pyproject_path.exists():
-        try:
-            with open(pyproject_path, "rb") as fh:
-                data = tomllib.load(fh)
-            version = data.get("project", {}).get("version") or (
-                data.get("tool", {}).get("poetry", {}).get("version")
+    if detected_version is None:
+        ok = False
+        details = (
+            "Could not detect version: pyproject.toml missing or "
+            "[project].version absent"
+        )
+    elif expected_tag is None:
+        ok = True
+        details = (
+            f"Detected version {detected_version} from {detected_source}; "
+            "no expected_tag provided"
+        )
+    else:
+        normalized = expected_tag.lstrip("v")
+        ok = detected_version == normalized
+        details = (
+            f"Version {detected_version} matches expected tag {expected_tag}"
+            if ok
+            else (
+                f"Version mismatch: detected {detected_version!r}, "
+                f"expected {normalized!r} (from tag {expected_tag!r})"
             )
-            sources.append({
-                "source": "pyproject.toml",
-                "version": version,
-                "aligned": version == expected_version,
-            })
-        except Exception as exc:
-            sources.append({
-                "source": "pyproject.toml",
-                "version": None,
-                "aligned": False,
-                "error": str(exc),
-            })
+        )
 
-    # Source 2: package.json
-    package_json_path = path / "package.json"
-    if package_json_path.exists():
-        try:
-            with open(package_json_path) as fh:
-                data = json.load(fh)
-            version = data.get("version")
-            sources.append({
-                "source": "package.json",
-                "version": version,
-                "aligned": version == expected_version,
-            })
-        except Exception as exc:
-            sources.append({
-                "source": "package.json",
-                "version": None,
-                "aligned": False,
-                "error": str(exc),
-            })
-
-    # Source 3: git tag (always checked when .git exists)
-    if (path / ".git").exists():
-        rc, stdout, _ = _run_git(["tag", "--list", expected_tag], path)
-        tag_exists = rc == 0 and stdout.strip() == expected_tag
-        sources.append({
-            "source": "git_tag",
-            "version": expected_tag if tag_exists else None,
-            "aligned": tag_exists,
-        })
-
-    # Fail-closed: empty sources → not aligned
-    all_aligned = bool(sources) and all(s["aligned"] for s in sources)
     return {
+        "tool": "check_version_alignment",
         "repo_path": str(path),
+        "ok": ok,
         "expected_tag": expected_tag,
-        "sources": sources,
-        "all_aligned": all_aligned,
+        "detected": {"version": detected_version, "source": detected_source},
+        "details": details,
+        "fail_closed": fail_closed,
     }
 
 
@@ -264,104 +231,78 @@ def check_version_alignment(repo_path: str, expected_tag: str) -> dict:
 # Tool: generate_release_checklist
 # ---------------------------------------------------------------------------
 
-_CHECKLIST: list[dict] = [
-    {
-        "item": "Repository working tree is clean (no uncommitted or untracked changes)",
-        "category": "hygiene",
-        "required": True,
-    },
-    {
-        "item": "Version string updated in pyproject.toml or package.json",
-        "category": "versioning",
-        "required": True,
-    },
-    {
-        "item": "CHANGELOG updated with entries for this release",
-        "category": "documentation",
-        "required": True,
-    },
-    {
-        "item": "All tests pass locally",
-        "category": "quality",
-        "required": True,
-    },
-    {
-        "item": "README reflects current feature set and usage",
-        "category": "documentation",
-        "required": False,
-    },
-    {
-        "item": "LICENSE file present in repository root",
-        "category": "hygiene",
-        "required": True,
-    },
-    {
-        "item": "No debug or temporary code committed",
-        "category": "hygiene",
-        "required": True,
-    },
-    {
-        "item": "Dependencies pinned or bounded appropriately in lock file",
-        "category": "quality",
-        "required": False,
-    },
-    {
-        "item": "Release artifacts built, tested, and verified",
-        "category": "release",
-        "required": False,
-    },
-]
-
 
 @mcp.tool()
-def generate_release_checklist(repo_path: str, version: str) -> dict:
-    """Generate a deterministic release checklist for the given version.
+def generate_release_checklist(repo_path: str, target_tag: str) -> dict:
+    """Deterministically generate a release checklist based on local repo state.
 
-    Returns a fixed, ordered list of checklist items. Output is always
-    identical for the same inputs. No filesystem reads beyond resolving the
-    path. No network access.
+    No network access. Reads pyproject.toml version, CI workflow presence, and
+    bug template presence to tailor the checklist.
 
     Args:
-        repo_path: Absolute or relative path to the local repository root.
-        version:   The target release version string, e.g. "v0.1.0".
+        repo_path:  Absolute or relative path to the repository root.
+        target_tag: Target release tag, e.g. "v0.1.0".
 
     Returns:
         {
-            "repo_path":      str,
-            "version":        str,
-            "checklist": [
-                {
-                    "item":     str,   # human-readable action
-                    "category": str,   # "hygiene" | "versioning" | "documentation"
-                                       # | "quality" | "release"
-                    "required": bool
-                }
-            ],
-            "total":          int,
-            "required_count": int
+            "tool": "generate_release_checklist",
+            "repo_path": str,
+            "target_tag": str,
+            "checklist_markdown": str,
+            "inputs_used": {
+                "detected_version": str | null,
+                "has_ci_workflows": bool,
+                "has_bug_template": bool
+            },
+            "fail_closed": bool
         }
     """
     path = Path(repo_path).resolve()
 
-    # Stamp the version into the tag-creation item so output is deterministic
-    # per (repo_path, version) pair.
-    checklist = [
-        {**item} for item in _CHECKLIST
+    detected_version = _detect_version(path)
+    has_ci_workflows = (path / ".github" / "workflows").is_dir()
+    has_bug_template = (
+        path / ".github" / "ISSUE_TEMPLATE" / "bug_report.yml"
+    ).exists()
+    test_cmd = "pytest -q" if _has_pytest(path) else "run repo tests"
+
+    lines: list[str] = [
+        f"# Release Checklist — {target_tag}",
+        "",
+        "## Version alignment",
+        f"- [ ] Confirm version alignment: run `check_version_alignment` "
+        f"with `expected_tag={target_tag}`",
+        "",
+        "## Tests",
+        f"- [ ] Run tests: `{test_cmd}` — all must pass before tagging",
+        "",
+        "## Tag",
+        f"- [ ] Create and push git tag:",
+        f"      `git tag {target_tag} && git push origin {target_tag}`",
+        "",
+        "## Release notes",
+        f"- [ ] Update CHANGELOG / release notes with entries for {target_tag}",
+        "",
+        "## Adoption hooks",
+        "- [ ] Verify adoption hooks are in place:",
+        f"  - Bug report template (.github/ISSUE_TEMPLATE/bug_report.yml): "
+        f"{'✓ present' if has_bug_template else '✗ missing'}",
+        f"  - CI workflows (.github/workflows/): "
+        f"{'✓ present' if has_ci_workflows else '✗ missing'}",
+        "  - Confirm pinned issues are set if applicable",
     ]
-    # Insert version-specific tag item after the last required versioning item
-    version_tag_item = {
-        "item": f"Git tag {version} created and pushed to remote",
-        "category": "versioning",
-        "required": True,
-    }
-    checklist.insert(4, version_tag_item)
 
     return {
+        "tool": "generate_release_checklist",
         "repo_path": str(path),
-        "version": version,
-        "checklist": checklist,
-        "total": len(checklist),
-        "required_count": sum(1 for it in checklist if it["required"]),
+        "target_tag": target_tag,
+        "checklist_markdown": "\n".join(lines),
+        "inputs_used": {
+            "detected_version": detected_version,
+            "has_ci_workflows": has_ci_workflows,
+            "has_bug_template": has_bug_template,
+        },
+        "fail_closed": detected_version is None,
     }
 
 
