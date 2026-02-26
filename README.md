@@ -208,6 +208,8 @@ See [`docs/V1_CONTRACT.md`](docs/V1_CONTRACT.md) for the frozen tool contracts
 and [`docs/DETERMINISM_NOTES.md`](docs/DETERMINISM_NOTES.md) for the
 determinism and fail-closed design rationale.
 
+See [docs/EXAMPLE_OUTPUTS.md](docs/EXAMPLE_OUTPUTS.md) for canonical example outputs.
+
 ---
 
 ## License
