@@ -7,6 +7,7 @@ than raising an exception.
 
 from __future__ import annotations
 
+import asyncio
 import tomllib
 from pathlib import Path
 
@@ -79,72 +80,89 @@ def check_repo_hygiene(repo_path: str) -> dict:
     # 1. pyproject.toml OR setup.cfg OR setup.py
     pkg_candidates = ["pyproject.toml", "setup.cfg", "setup.py"]
     found_pkg = next((f for f in pkg_candidates if (path / f).exists()), None)
-    checks.append({
-        "check_id": "has_package_definition",
-        "ok": found_pkg is not None,
-        "details": f"Found {found_pkg}" if found_pkg
-                   else f"Not found (checked: {', '.join(pkg_candidates)})",
-    })
+    checks.append(
+        {
+            "check_id": "has_package_definition",
+            "ok": found_pkg is not None,
+            "details": f"Found {found_pkg}"
+            if found_pkg
+            else f"Not found (checked: {', '.join(pkg_candidates)})",
+        }
+    )
 
     # 2. LICENSE
     lic_candidates = ["LICENSE", "LICENSE.txt", "LICENSE.md", "LICENSE.rst"]
     found_lic = next((f for f in lic_candidates if (path / f).exists()), None)
-    checks.append({
-        "check_id": "has_license",
-        "ok": found_lic is not None,
-        "details": f"Found {found_lic}" if found_lic
-                   else f"Not found (checked: {', '.join(lic_candidates)})",
-    })
+    checks.append(
+        {
+            "check_id": "has_license",
+            "ok": found_lic is not None,
+            "details": f"Found {found_lic}"
+            if found_lic
+            else f"Not found (checked: {', '.join(lic_candidates)})",
+        }
+    )
 
     # 3. README
     readme_candidates = ["README.md", "README.rst", "README.txt", "README"]
     found_readme = next((f for f in readme_candidates if (path / f).exists()), None)
-    checks.append({
-        "check_id": "has_readme",
-        "ok": found_readme is not None,
-        "details": f"Found {found_readme}" if found_readme
-                   else f"Not found (checked: {', '.join(readme_candidates)})",
-    })
+    checks.append(
+        {
+            "check_id": "has_readme",
+            "ok": found_readme is not None,
+            "details": f"Found {found_readme}"
+            if found_readme
+            else f"Not found (checked: {', '.join(readme_candidates)})",
+        }
+    )
 
     # 4. .github/ISSUE_TEMPLATE/bug_report.yml
     bug_yml = path / ".github" / "ISSUE_TEMPLATE" / "bug_report.yml"
     bug_ok = bug_yml.exists()
-    checks.append({
-        "check_id": "has_bug_report_template",
-        "ok": bug_ok,
-        "details": "Found .github/ISSUE_TEMPLATE/bug_report.yml" if bug_ok
-                   else "Not found: .github/ISSUE_TEMPLATE/bug_report.yml",
-    })
+    checks.append(
+        {
+            "check_id": "has_bug_report_template",
+            "ok": bug_ok,
+            "details": "Found .github/ISSUE_TEMPLATE/bug_report.yml"
+            if bug_ok
+            else "Not found: .github/ISSUE_TEMPLATE/bug_report.yml",
+        }
+    )
 
     # 5. .github/workflows/ directory (presence only)
     workflows_dir = path / ".github" / "workflows"
     wf_ok = workflows_dir.is_dir()
-    checks.append({
-        "check_id": "has_ci_workflows",
-        "ok": wf_ok,
-        "details": "Found .github/workflows/" if wf_ok
-                   else "Not found: .github/workflows/",
-    })
+    checks.append(
+        {
+            "check_id": "has_ci_workflows",
+            "ok": wf_ok,
+            "details": "Found .github/workflows/" if wf_ok else "Not found: .github/workflows/",
+        }
+    )
 
     # 6. docs/V1_CONTRACT.md
     contract_md = path / "docs" / "V1_CONTRACT.md"
     contract_ok = contract_md.exists()
-    checks.append({
-        "check_id": "has_v1_contract",
-        "ok": contract_ok,
-        "details": "Found docs/V1_CONTRACT.md" if contract_ok
-                   else "Not found: docs/V1_CONTRACT.md",
-    })
+    checks.append(
+        {
+            "check_id": "has_v1_contract",
+            "ok": contract_ok,
+            "details": "Found docs/V1_CONTRACT.md" if contract_ok else "Not found: docs/V1_CONTRACT.md",
+        }
+    )
 
     # 7. docs/DETERMINISM_NOTES.md
     det_md = path / "docs" / "DETERMINISM_NOTES.md"
     det_ok = det_md.exists()
-    checks.append({
-        "check_id": "has_determinism_notes",
-        "ok": det_ok,
-        "details": "Found docs/DETERMINISM_NOTES.md" if det_ok
-                   else "Not found: docs/DETERMINISM_NOTES.md",
-    })
+    checks.append(
+        {
+            "check_id": "has_determinism_notes",
+            "ok": det_ok,
+            "details": "Found docs/DETERMINISM_NOTES.md"
+            if det_ok
+            else "Not found: docs/DETERMINISM_NOTES.md",
+        }
+    )
 
     ok = all(c["ok"] for c in checks)
     return {
@@ -194,10 +212,7 @@ def check_version_alignment(
 
     if detected_version is None:
         ok = False
-        details = (
-            "Could not detect version: pyproject.toml missing or "
-            "[project].version absent"
-        )
+        details = "Could not detect version: pyproject.toml missing or [project].version absent"
     elif expected_tag is None:
         ok = True
         details = (
@@ -261,23 +276,20 @@ def generate_release_checklist(repo_path: str, target_tag: str) -> dict:
 
     detected_version = _detect_version(path)
     has_ci_workflows = (path / ".github" / "workflows").is_dir()
-    has_bug_template = (
-        path / ".github" / "ISSUE_TEMPLATE" / "bug_report.yml"
-    ).exists()
+    has_bug_template = (path / ".github" / "ISSUE_TEMPLATE" / "bug_report.yml").exists()
     test_cmd = "pytest -q" if _has_pytest(path) else "run repo tests"
 
     lines: list[str] = [
         f"# Release Checklist — {target_tag}",
         "",
         "## Version alignment",
-        f"- [ ] Confirm version alignment: run `check_version_alignment` "
-        f"with `expected_tag={target_tag}`",
+        f"- [ ] Confirm version alignment: run `check_version_alignment` with `expected_tag={target_tag}`",
         "",
         "## Tests",
         f"- [ ] Run tests: `{test_cmd}` — all must pass before tagging",
         "",
         "## Tag",
-        f"- [ ] Create and push git tag:",
+        "- [ ] Create and push git tag:",
         f"      `git tag {target_tag} && git push origin {target_tag}`",
         "",
         "## Release notes",
@@ -285,10 +297,8 @@ def generate_release_checklist(repo_path: str, target_tag: str) -> dict:
         "",
         "## Adoption hooks",
         "- [ ] Verify adoption hooks are in place:",
-        f"  - Bug report template (.github/ISSUE_TEMPLATE/bug_report.yml): "
-        f"{'✓ present' if has_bug_template else '✗ missing'}",
-        f"  - CI workflows (.github/workflows/): "
-        f"{'✓ present' if has_ci_workflows else '✗ missing'}",
+        f"  - Bug report template (.github/ISSUE_TEMPLATE/bug_report.yml): {'✓ present' if has_bug_template else '✗ missing'}",
+        f"  - CI workflows (.github/workflows/): {'✓ present' if has_ci_workflows else '✗ missing'}",
         "  - Confirm pinned issues are set if applicable",
     ]
 
@@ -313,7 +323,18 @@ def generate_release_checklist(repo_path: str, target_tag: str) -> dict:
 
 def main() -> None:
     """Launch the mcp-release-guardian MCP server over stdio."""
-    mcp.run(transport="stdio")
+    try:
+        mcp.run(transport="stdio")
+    except (KeyboardInterrupt, asyncio.CancelledError):
+        # Clean exit on Ctrl+C / cancellation
+        return
+    except BaseException as e:
+        # Some runtimes raise ExceptionGroup on cancellation; suppress only if it's purely cancellation.
+        if isinstance(e, ExceptionGroup) and all(
+            isinstance(x, (KeyboardInterrupt, asyncio.CancelledError)) for x in e.exceptions
+        ):
+            return
+        raise
 
 
 if __name__ == "__main__":
