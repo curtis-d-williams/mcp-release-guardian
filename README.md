@@ -11,6 +11,14 @@ Deterministic MCP server for validating release hygiene in local repositories. N
 
 ## Release Discipline & Guarantees
 
+## Governance Template
+
+This repository includes a reusable scaffold for building deterministic, governance-grade MCP servers:
+
+- [`template/`](template/) — copy/paste starter structure (README, pyproject, CI workflows, docs templates)
+- [`template/ADOPTING_THIS_TEMPLATE.md`](template/ADOPTING_THIS_TEMPLATE.md) — minimal adoption steps and guardrails
+
+
 `mcp-release-guardian` is intentionally minimal and governance-oriented.
 
 **Contract stability**
