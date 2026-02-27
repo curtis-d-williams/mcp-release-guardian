@@ -253,3 +253,30 @@ See [docs/EXAMPLE_OUTPUTS.md](docs/EXAMPLE_OUTPUTS.md) for canonical example out
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+---
+
+## Governance / Contract Status (Tier 1)
+
+This MCP guardian is intended to be governance-grade infrastructure.
+
+### Tier 1 guarantees
+- Deterministic output for the same inputs and environment constraints
+- Network-free evaluation (no implicit network calls)
+- Read-only evaluation (does not write to the target repo)
+- Fail-closed posture: inability to evaluate reliably yields a failing result (never permissive)
+- V1 contract: output semantics are stable under the v1 label; breaking/semantic changes require v2+ with migration notes
+
+### How to interpret results
+- `ok` indicates policy success for this guardian (compliance passed)
+- `fail_closed` indicates a safety posture: if true, treat the run as a hard stop for automation
+- When `ok` is false and `fail_closed` is true, the guardian is explicitly refusing to approve under uncertainty
+
+### Reproducibility
+For orchestration use-cases, a clean-room run should:
+- install a pinned guardian version (e.g., `mcp-release-guardian==<version>`)
+- produce canonical JSON output (stable sorting / deterministic serialization)
+- remain network-free and read-only
+
+If you are running via an orchestrator, treat orchestrator wrapper execution success as distinct from guardian policy success.
+
