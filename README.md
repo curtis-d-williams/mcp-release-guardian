@@ -1,5 +1,8 @@
 # mcp-release-guardian
 
+[![PyPI](https://img.shields.io/pypi/v/mcp-release-guardian.svg)](https://pypi.org/project/mcp-release-guardian/) [![Python](https://img.shields.io/pypi/pyversions/mcp-release-guardian.svg)](https://pypi.org/project/mcp-release-guardian/) [![CI](https://github.com/curtis-d-williams/mcp-release-guardian/actions/workflows/ci.yml/badge.svg)](https://github.com/curtis-d-williams/mcp-release-guardian/actions/workflows/ci.yml) [![PyPI install smoke](https://github.com/curtis-d-williams/mcp-release-guardian/actions/workflows/pypi-install-smoke.yml/badge.svg)](https://github.com/curtis-d-williams/mcp-release-guardian/actions/workflows/pypi-install-smoke.yml)
+
+
 Deterministic MCP server for validating release hygiene in local repositories. Network-free, read-only, governance-grade outputs.
 
 ---
