@@ -280,3 +280,22 @@ For orchestration use-cases, a clean-room run should:
 
 If you are running via an orchestrator, treat orchestrator wrapper execution success as distinct from guardian policy success.
 
+
+---
+
+## Tier 2 Compatibility (Multi-Guardian Composition)
+
+This guardian is designed to operate safely under multi-guardian orchestration.
+
+Composition assumptions:
+- It does not mutate shared state.
+- It does not depend on execution order relative to other guardians.
+- Its `ok` and `fail_closed` semantics are self-contained and do not rely on wrapper-level aggregation.
+- Missing dependency or execution failure results in explicit fail-closed behavior (e.g., guardian_import_failed when invoked via orchestrator).
+
+Under V1 semantics:
+- Policy decisions should be derived from guardian-level fields.
+- Orchestrator wrapper execution success MUST NOT be interpreted as policy approval.
+
+This guardian is Tier 2 compatible under the aggregation model defined in:
+https://github.com/curtis-d-williams/governance-blueprints
