@@ -7,6 +7,31 @@ Deterministic MCP server for validating release hygiene in local repositories. N
 
 ---
 
+
+
+## Release Discipline & Guarantees
+
+`mcp-release-guardian` is intentionally minimal and governance-oriented.
+
+**Contract stability**
+- V1 tool schemas are frozen.
+- No behavioral changes without explicit phase reopening.
+- Canonical JSON outputs documented in [`docs/EXAMPLE_OUTPUTS.md`](docs/EXAMPLE_OUTPUTS.md).
+
+**Determinism**
+- Network-free execution.
+- Read-only repository inspection.
+- Fail-closed semantics enforced.
+- Design rationale documented in [`docs/DETERMINISM_NOTES.md`](docs/DETERMINISM_NOTES.md).
+
+**Reproducibility**
+- Published to PyPI.
+- CI-validated on push.
+- Tag-triggered PyPI install smoke test ensures external install integrity.
+
+See [`docs/V1_CONTRACT.md`](docs/V1_CONTRACT.md) for the authoritative contract.
+
+
 ## Overview
 
 `mcp-release-guardian` exposes three tools via the [Model Context Protocol](https://modelcontextprotocol.io/):
