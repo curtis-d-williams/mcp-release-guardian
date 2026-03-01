@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """FastMCP server for mcp-release-guardian.
 
 Deterministic, network-free, read-only release hygiene tools.

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """Tests for the three V1 MCP tools.
 
 All assertions are derived from the frozen V1 contract in docs/V1_CONTRACT.md.

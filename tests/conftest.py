@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """Pytest fixtures for mcp-release-guardian V1 tests.
 
 Plain-directory fixtures are used for hygiene, version, and checklist tools
